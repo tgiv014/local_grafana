@@ -1,0 +1,75 @@
+version: "3"
+
+networks:
+  loki:
+
+
+services:
+  loki:
+    image: grafana/loki:1.5.0
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - loki
+
+  promtail:
+    image: grafana/promtail:1.5.0
+    volumes:
+      - /var/log:/var/log
+    command: -config.file=/etc/promtail/docker-config.yaml
+    networks:
+      - loki
+
+  influxdb:
+    image: influxdb:latest
+    ports:
+      - '8086:8086'
+    volumes:
+      - influxdb-storage:/var/lib/influxdb
+      - ./conf/influxdb/influxdb.conf:/etc/influxdb/influxdb.conf:ro
+    command: -config /etc/influxdb/influxdb.conf
+    networks:
+      - loki
+
+  chronograf:
+    image: chronograf:latest
+    ports:
+      - '8888:8888'
+    volumes:
+      - chronograf-storage:/var/lib/chronograf
+    depends_on:
+      - influxdb
+    environment:
+      - INFLUXDB_URL=http://influxdb:8086    
+    networks:
+      - loki
+
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource,grafana-worldmap-panel
+    volumes:
+      - grafana-storage:/var/lib/grafana
+    depends_on:
+      - influxdb
+    networks:
+      - loki
+  
+  authmap:
+    build:
+      context: https://github.com/tgiv014/authmap.git
+    volumes:
+      - /var/log/auth.log:/var/log/auth.log:ro
+      - ./data/authmap/GeoLite2-City.mmdb:/etc/authmap/GeoLite2-City.mmdb
+    depends_on:
+      - influxdb
+    networks:
+      - loki
+
+volumes:
+  influxdb-storage:
+  chronograf-storage:
+  grafana-storage:
